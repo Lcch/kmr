@@ -40,14 +40,14 @@ var (
 
 type ComputeWrap struct {
 	mapFunc    func(kvs <-chan *kmrpb.KV) <-chan *kmrpb.KV
-	reduceFunc func(kvs <-chan *kmrpb.KV) <-chan *kmrpb.KV
+	reduceFunc func(key []byte, values [][]byte) []*kmrpb.KV
 }
 
 func (cw *ComputeWrap) BindMapper(mapper func(kvs <-chan *kmrpb.KV) <-chan *kmrpb.KV) {
 	cw.mapFunc = mapper
 }
 
-func (cw *ComputeWrap) BindReducer(reducer func(kvs <-chan *kmrpb.KV) <-chan *kmrpb.KV) {
+func (cw *ComputeWrap) BindReducer(reducer func(key []byte, values [][]byte) []*kmrpb.KV) {
 	cw.reduceFunc = reducer
 }
 
@@ -281,7 +281,7 @@ func (cw *ComputeWrap) doReduce(bk bucket.Bucket, reduceID int, nMap int, commit
 		}
 		values = values[:0]
 		lastKey = r.Key
-		values = append(values, r.Key)
+		values = append(values, r.Value)
 	}
 	if lastKey != nil {
 		res, _ := cw.doReduceForSingleKey(lastKey, values)
@@ -294,25 +294,7 @@ func (cw *ComputeWrap) doReduce(bk bucket.Bucket, reduceID int, nMap int, commit
 }
 
 func (cw *ComputeWrap) doReduceForSingleKey(key []byte, values [][]byte) ([]*kmrpb.KV, error) {
-	waitc := make(chan struct{})
-	inputKV := make(chan *kmrpb.KV, 1024)
-	outputKV := cw.reduceFunc(inputKV)
-	ret := make([]*kmrpb.KV, 0)
-	go func() {
-		for in := range outputKV {
-			ret = append(ret, in)
-		}
-		close(waitc)
-	}()
-	for _, v := range values {
-		inputKV <- &kmrpb.KV{
-			Key:   key,
-			Value: v,
-		}
-	}
-	close(inputKV)
-	<-waitc
-	return ret, nil
+	return cw.reduceFunc(key, values), nil
 }
 
 // RecordToKV converts an Record to a kmrpb.KV

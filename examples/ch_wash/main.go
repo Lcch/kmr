@@ -39,7 +39,7 @@ func isSplitPuncts(r rune) bool {
 	return false
 }
 
-func remove_illegal_pattern(line string) string {
+func RemoveIllegalPattern(line string) string {
 	if strings.HasPrefix(line, "<docno>") || strings.HasSuffix(line, "<url>") {
 		return ""
 	}
@@ -49,7 +49,7 @@ func remove_illegal_pattern(line string) string {
 	return line
 }
 
-func process_single_sentence(line string) []string {
+func ProcessSingleSentence(line string) []string {
 	outputs := make([]string, 0)
 
 	out := make([]string, 0)
@@ -94,8 +94,8 @@ func Map(kvs <-chan *kmrpb.KV) <-chan *kmrpb.KV {
 	out := make(chan *kmrpb.KV, 1024)
 	go func() {
 		for kv := range kvs {
-			sentence := remove_illegal_pattern(strings.Trim(string(kv.Value), "\n"))
-			for _, procceed := range process_single_sentence(sentence) {
+			sentence := RemoveIllegalPattern(strings.Trim(string(kv.Value), "\n"))
+			for _, procceed := range ProcessSingleSentence(sentence) {
 				out <- &kmrpb.KV{Key: []byte(procceed), Value: []byte{1}}
 			}
 		}
@@ -104,21 +104,9 @@ func Map(kvs <-chan *kmrpb.KV) <-chan *kmrpb.KV {
 	return out
 }
 
-func Reduce(kvs <-chan *kmrpb.KV) <-chan *kmrpb.KV {
-	// Deduplicate
-	out := make(chan *kmrpb.KV, 1024)
-	go func() {
-		word := ""
-		count := 0
-		for kv := range kvs {
-			if count == 0 {
-				word = string(kv.Key)
-			}
-			count += 1
-		}
-		out <- &kmrpb.KV{Key: []byte(word), Value: []byte{1}}
-		close(out)
-	}()
+func Reduce(key []byte, values [][]byte) []*kmrpb.KV {
+	out := make([]*kmrpb.KV, 0)
+	out = append(out, &kmrpb.KV{Key: key, Value: []byte{1}})
 	return out
 }
 
