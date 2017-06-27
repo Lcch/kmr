@@ -87,7 +87,7 @@ func (cw *ComputeWrap) Run() {
 			if err != nil || task.Retcode != 0 {
 				log.Error(err)
 				// TODO: random backoff
-				time.Sleep(1 * time.Second)
+				time.Sleep(2 * time.Second)
 				continue
 			}
 			taskInfo := task.Taskinfo
@@ -121,7 +121,7 @@ func (cw *ComputeWrap) Run() {
 			})
 			// backoff
 			if err != nil {
-				time.Sleep(1 * time.Second)
+				time.Sleep(2 * time.Second)
 			}
 		}
 	}
@@ -267,21 +267,22 @@ func (cw *ComputeWrap) doReduce(bk bucket.Bucket, reduceID int, nMap int, commit
 	sorted := make(chan *records.Record, 1024)
 	go records.MergeSort(readers, sorted)
 
-	inputs := make(chan *kmrpb.KV, 1024)
-	outputs := cw.reduceFunc(inputs)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func(outputs <-chan *kmrpb.KV) {
-		for r := range outputs {
-			writer.WriteRecord(KVToRecord(r))
-		}
-		wg.Done()
-	}(outputs)
+	//inputs := make(chan *kmrpb.KV, 1024)
+	//outputs := cw.reduceFunc(inputs)
+	//var wg sync.WaitGroup
+	//wg.Add(1)
+	//go func(outputs <-chan *kmrpb.KV) {
+	//	for r := range outputs {
+	//		writer.WriteRecord(KVToRecord(r))
+	//	}
+	//	wg.Done()
+	//}(outputs)
 	for r := range sorted {
-		inputs <- RecordToKV(r)
+		RecordToKV(r)
+		//inputs <- RecordToKV(r)
 	}
-	close(inputs)
-	wg.Wait()
+	//close(inputs)
+	//wg.Wait()
 	log.Debug("DONE Reduce. Took:", time.Since(startTime))
 	return nil
 }
