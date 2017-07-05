@@ -154,7 +154,7 @@ func (cw *ComputeWrap) phaseSelector(jobName string, phase string,
 	switch phase {
 	case "map":
 		log.Infof("starting id%d mapper", taskID)
-		mapBk, _ := bucket.NewFSBucket("/")
+		mapBk, _ := bucket.NewBucket(mapBucket.BucketType, mapBucket.Config)
 		reader, err := mapBk.OpenRead(file)
 		if err != nil {
 			log.Fatalf("Fail to open object %s: %v", file, err)
