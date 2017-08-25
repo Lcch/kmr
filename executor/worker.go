@@ -162,6 +162,8 @@ func (w *Worker) runReducer(cw *ComputeWrapClass, node *jobgraph.MapReduceNode, 
 }
 
 func (w *Worker) runMapper(cw *ComputeWrapClass, node *jobgraph.MapReduceNode, subIndex int32) {
+	startTime := time.Now()
+
 	// Inputs Files
 	inputFiles := node.GetInputFiles().GetFiles()
 	readers := make([]records.RecordReader, 0)
@@ -204,4 +206,6 @@ func (w *Worker) runMapper(cw *ComputeWrapClass, node *jobgraph.MapReduceNode, s
 	for _, writer := range writers {
 		writer.Close()
 	}
+
+	log.Debug("FINISH runMapper. Took:", time.Since(startTime))
 }

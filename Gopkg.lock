@@ -20,6 +20,12 @@
   version = "v1.1.0"
 
 [[projects]]
+  name = "github.com/aliyun/aliyun-oss-go-sdk"
+  packages = ["oss"]
+  revision = "2d4691ac1af4fa0197178f31d8f9ca23798aa8e3"
+  version = "1.5.1"
+
+[[projects]]
   branch = "master"
   name = "github.com/PuerkitoBio/urlesc"
   packages = ["."]

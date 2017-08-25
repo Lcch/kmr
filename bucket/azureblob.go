@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/Azure/azure-sdk-for-go/storage"
+	"github.com/go-openapi/errors"
 )
 
 // max block size for azure blob
@@ -120,4 +121,8 @@ func (bk *AzureBlobBucket) Delete(key string) error {
 	blob := bk.container.GetBlobReference(key)
 	_, err := blob.DeleteIfExists(&storage.DeleteBlobOptions{})
 	return err
+}
+
+func (bk *AzureBlobBucket) ListFiles() ([]string, error) {
+	return nil, errors.NotImplemented("azure list file is not implemented")
 }
