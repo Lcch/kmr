@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/naturali/kmr/cli"
 	"github.com/naturali/kmr/jobgraph"
@@ -50,7 +49,10 @@ func (w *noIdeaMap) Map(key interface{}, value interface{}, output func(k, v int
 						if src == "" {
 							continue
 						}
-						abt := kvs["abtesting"].(map[string]interface{})
+						abt, ok := kvs["abtesting"].(map[string]interface{})
+						if !ok {
+							continue
+						}
 						if v, ok := abt["zir-blank-interval"].(string); ok {
 							output(v+"=tot", uint32(1))
 							output(v+"_"+e.DeviceID, uint32(1))
