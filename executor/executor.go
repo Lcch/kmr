@@ -49,24 +49,32 @@ func (cw *ComputeWrapClass) sortAndCombine(aggregated []*records.Record) []*reco
 	keyClass, valueClass := cw.combiner.GetInputKeyTypeConverter(), cw.combiner.GetInputValueTypeConverter()
 	combined := make([]*records.Record, 0)
 	var curRecord *records.Record
+	var valueInterface interface{}
+	var keyInterface interface{}
 	outputFunc := func(v interface{}) {
-		curRecord.Value = valueClass.ToBytes(v)
+		valueInterface = v
 	}
 	for _, r := range aggregated {
 		if curRecord == nil {
 			curRecord = r
+			keyInterface = keyClass.FromBytes(r.Key)
+			valueInterface = valueClass.FromBytes(r.Value)
 			continue
 		}
 		if !bytes.Equal(curRecord.Key, r.Key) {
 			if curRecord.Key != nil {
+				curRecord.Value = valueClass.ToBytes(valueInterface)
 				combined = append(combined, curRecord)
 			}
 			curRecord = r
+			keyInterface = keyClass.FromBytes(r.Key)
+			valueInterface = valueClass.FromBytes(r.Value)
 		} else {
-			cw.combiner.Combine(keyClass.FromBytes(curRecord.Key), valueClass.FromBytes(curRecord.Value), valueClass.FromBytes(r.Value), outputFunc)
+			cw.combiner.Combine(keyInterface, valueInterface, valueClass.FromBytes(r.Value), outputFunc)
 		}
 	}
 	if curRecord != nil && curRecord.Key != nil {
+		curRecord.Value = valueClass.ToBytes(valueInterface)
 		combined = append(combined, curRecord)
 	}
 	return combined
