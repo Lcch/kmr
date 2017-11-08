@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
 	"regexp"
 	"strings"
 	"unicode"
@@ -74,6 +73,10 @@ type wordCountReduce struct {
 	mapred.ReducerCommon
 }
 
+type wordCountCombine struct {
+	mapred.CombineCommon
+}
+
 // Map Value is lines from file. Map function split lines into words and emit (word, 1) pairs
 func (*wordCountMap) Map(key interface{}, value interface{},
 	output func(k, v interface{}), reporter interface{}) {
@@ -98,17 +101,12 @@ func (*wordCountReduce) Reduce(key interface{}, valuesNext mapred.ValueIterator,
 	output(count)
 }
 
-func wordCountCombiner(v1 []byte, v2 []byte) []byte {
-	var count uint64
-	count += binary.LittleEndian.Uint64(v1)
-	count += binary.LittleEndian.Uint64(v2)
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, count)
-	return b
+func (*wordCountCombine) Combine(key interface{}, v1 interface{}, v2 interface{}, output func(v interface{})) {
+	output(v1.(uint64) + v2.(uint64))
 }
 
 // It defines the map-reduce of word-count which is counting the number of each word show-ups in the corpus.
-func NewWordCountMapReduce() (*wordCountMap, *wordCountReduce, func(v1 []byte, v2 []byte) []byte) {
+func NewWordCountMapReduce() (*wordCountMap, *wordCountReduce, *wordCountCombine) {
 	wcmap := &wordCountMap{
 		MapperCommon: mapred.MapperCommon{
 			TypeConverters: mapred.TypeConverters{
@@ -129,7 +127,17 @@ func NewWordCountMapReduce() (*wordCountMap, *wordCountReduce, func(v1 []byte, v
 			},
 		},
 	}
-	return wcmap, wcreduce, wordCountCombiner
+	wcCombine := &wordCountCombine{
+		CombineCommon: mapred.CombineCommon{
+			TypeConverters: mapred.TypeConverters{
+				InputKeyTypeConverter:    mapred.String{},
+				InputValueTypeConverter:  mapred.Uint64{},
+				OutputKeyTypeConverter:   mapred.String{},
+				OutputValueTypeConverter: mapred.Uint64{},
+			},
+		},
+	}
+	return wcmap, wcreduce, wcCombine
 }
 
 func main() {
@@ -138,15 +146,23 @@ func main() {
 	var job jobgraph.Job
 	job.SetName("wordcount")
 
+	//input := &jobgraph.InputFiles{
+	//	Files: []string{
+	//		"/octp/sogout/sogout/outputs/filtered/sogout_data.1/part-m-0000.bz2",
+	//	},
+	//	Type: "bz2",
+	//}
+
 	input := &jobgraph.InputFiles{
 		Files: []string{
-			"/octp/sogout/sogout/outputs/filtered/sogout_data.1/part-m-0000.bz2",
+			"/etc/passwd",
+			"/etc/passwd",
 		},
-		Type: "bz2",
+		Type: "textstream",
 	}
 	job.AddJobNode(input, "wordcount").
 		AddMapper(mapper, 1).
-		AddReducer(reducer, 3).
+		AddReducer(reducer, 1).
 		SetCombiner(combiner)
 	cli.Run(&job)
 }

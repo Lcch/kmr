@@ -22,9 +22,9 @@ const (
 )
 
 type ComputeWrapClass struct {
-	mapper      mapred.Mapper
-	reducer     mapred.Reducer
-	combineFunc func(v1 []byte, v2 []byte) []byte
+	mapper   mapred.Mapper
+	reducer  mapred.Reducer
+	combiner mapred.Combiner
 }
 
 func (cw *ComputeWrapClass) BindMapper(mapper mapred.Mapper) {
@@ -35,19 +35,23 @@ func (cw *ComputeWrapClass) BindReducer(reducer mapred.Reducer) {
 	cw.reducer = reducer
 }
 
-func (cw *ComputeWrapClass) BindCombiner(combiner func(v1 []byte, v2 []byte) []byte) {
-	cw.combineFunc = combiner
+func (cw *ComputeWrapClass) BindCombiner(combiner mapred.Combiner) {
+	cw.combiner = combiner
 }
 
 func (cw *ComputeWrapClass) sortAndCombine(aggregated []*records.Record) []*records.Record {
 	sort.Slice(aggregated, func(i, j int) bool {
 		return bytes.Compare(aggregated[i].Key, aggregated[j].Key) < 0
 	})
-	if cw.combineFunc == nil {
+	if cw.combiner == nil {
 		return aggregated
 	}
+	keyClass, valueClass := cw.combiner.GetInputKeyTypeConverter(), cw.combiner.GetInputValueTypeConverter()
 	combined := make([]*records.Record, 0)
 	var curRecord *records.Record
+	outputFunc := func(v interface{}) {
+		curRecord.Value = valueClass.ToBytes(v)
+	}
 	for _, r := range aggregated {
 		if curRecord == nil {
 			curRecord = r
@@ -59,7 +63,7 @@ func (cw *ComputeWrapClass) sortAndCombine(aggregated []*records.Record) []*reco
 			}
 			curRecord = r
 		} else {
-			curRecord.Value = cw.combineFunc(curRecord.Value, r.Value)
+			cw.combiner.Combine(keyClass.FromBytes(curRecord.Key), valueClass.FromBytes(curRecord.Value), valueClass.FromBytes(r.Value), outputFunc)
 		}
 	}
 	if curRecord != nil && curRecord.Key != nil {
@@ -152,19 +156,26 @@ func (cw *ComputeWrapClass) DoMap(rr records.RecordReader, writers []records.Rec
 	go records.MergeSort(readers, sorted)
 
 	var curRecord *records.Record
+	combinerKeyClass, combinerValueClass :=
+		cw.combiner.GetInputKeyTypeConverter(), cw.combiner.GetInputValueTypeConverter()
+	outputFunc := func(v interface{}) {
+		curRecord.Value = combinerValueClass.ToBytes(v)
+	}
 	for r := range sorted {
 		if curRecord == nil {
 			curRecord = r
 			continue
 		}
-		if cw.combineFunc == nil || !bytes.Equal(curRecord.Key, r.Key) {
+		if cw.combiner == nil || !bytes.Equal(curRecord.Key, r.Key) {
 			if curRecord.Key != nil {
 				rBucketID := util.HashBytesKey(curRecord.Key) % nReduce
 				writers[rBucketID].WriteRecord(curRecord)
 			}
 			curRecord = r
 		} else {
-			curRecord.Value = cw.combineFunc(curRecord.Value, r.Value)
+			cw.combiner.Combine(
+				combinerKeyClass.FromBytes(curRecord.Key), combinerValueClass.FromBytes(curRecord.Value),
+				combinerValueClass.FromBytes(r.Value), outputFunc)
 		}
 	}
 	if curRecord != nil && curRecord.Key != nil {
