@@ -24,7 +24,7 @@ const (
 type ComputeWrapClass struct {
 	mapper      mapred.Mapper
 	reducer     mapred.Reducer
-	combineFunc func(key []byte, v1 []byte, v2 []byte) []byte
+	combineFunc func(v1 []byte, v2 []byte) []byte
 }
 
 func (cw *ComputeWrapClass) BindMapper(mapper mapred.Mapper) {
@@ -35,42 +35,8 @@ func (cw *ComputeWrapClass) BindReducer(reducer mapred.Reducer) {
 	cw.reducer = reducer
 }
 
-func (cw *ComputeWrapClass) BindCombiner(combiner mapred.Reducer) {
-	// TODO: should use reducer directly
-	if combiner != nil {
-		cw.combineFunc = func(key []byte, v1 []byte, v2 []byte) []byte {
-			var res []byte
-			counter := 0
-			nextIter := &ValueIteratorFunc{
-				IterFunc: func() (interface{}, error) {
-					if counter == 0 {
-						counter++
-						return cw.reducer.GetInputValueTypeConverter().FromBytes(v1), nil
-					} else if counter == 1 {
-						counter++
-						return cw.reducer.GetInputValueTypeConverter().FromBytes(v2), nil
-					}
-					return nil, errors.New(mapred.ErrorNoMoreKey)
-				},
-			}
-			alreadyOutput := false
-			collectFunc := func(v interface{}) {
-				if alreadyOutput {
-					log.Errorf("value of key: %v has been collected", key)
-					return
-				}
-				res = cw.reducer.GetOutputValueTypeConverter().ToBytes(v)
-				alreadyOutput = true
-			}
-			combiner.Reduce(cw.reducer.GetInputKeyTypeConverter().FromBytes(key), nextIter, collectFunc, nil)
-			if res == nil {
-				log.Fatal("Combine function should not produce none")
-			}
-			return res
-		}
-	} else {
-		cw.combineFunc = nil
-	}
+func (cw *ComputeWrapClass) BindCombiner(combiner func(v1 []byte, v2 []byte) []byte) {
+	cw.combineFunc = combiner
 }
 
 func (cw *ComputeWrapClass) sortAndCombine(aggregated []*records.Record) []*records.Record {
@@ -93,7 +59,7 @@ func (cw *ComputeWrapClass) sortAndCombine(aggregated []*records.Record) []*reco
 			}
 			curRecord = r
 		} else {
-			curRecord.Value = cw.combineFunc(curRecord.Key, curRecord.Value, r.Value)
+			curRecord.Value = cw.combineFunc(curRecord.Value, r.Value)
 		}
 	}
 	if curRecord != nil && curRecord.Key != nil {
@@ -198,7 +164,7 @@ func (cw *ComputeWrapClass) DoMap(rr records.RecordReader, writers []records.Rec
 			}
 			curRecord = r
 		} else {
-			curRecord.Value = cw.combineFunc(curRecord.Key, curRecord.Value, r.Value)
+			curRecord.Value = cw.combineFunc(curRecord.Value, r.Value)
 		}
 	}
 	if curRecord != nil && curRecord.Key != nil {
